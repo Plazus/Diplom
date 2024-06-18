@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\Hash;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -14,12 +14,82 @@ use Illuminate\Http\Request;
 |
 */
 
+
+
+//
 Route::get('/', function () {
-    return view('welcome');
-});
-Route::get('/main', function () {
-    return view('main');
+    $filteredReviews = DB::table('reviews')
+                        ->join('products', 'reviews.product', '=', 'products.id')
+                        ->select('reviews.*', 'products.name as product_name', 'products.image as product_image', 'products.id as product_id')
+                        ->whereBetween('reviews.evaluation', [3, 5])
+                        ->orderByDesc('reviews.evaluation')
+                        ->get();
+
+    // Получаем уникальные товары
+    $uniqueProducts = $filteredReviews->unique('product_id');
+
+    // Вычисляем и сохраняем среднюю оценку для каждого товара
+    $averageRatings = [];
+    foreach ($filteredReviews as $review) {
+        $productId = $review->product_id;
+        if (!isset($averageRatings[$productId])) {
+            $averageRatings[$productId] = collect([$review->evaluation]);
+        } else {
+            $averageRatings[$productId]->push($review->evaluation);
+        }
+    }
+
+    // Вычисляем среднюю оценку для каждого товара
+    foreach ($averageRatings as $productId => $ratings) {
+        $averageRatings[$productId] = $ratings->avg();
+    }
+
+    return view('main', compact('uniqueProducts', 'filteredReviews', 'averageRatings'));
+    
 })->name('home');
+
+
+
+//
+
+Route::get('/personal/uppdate_profile', function(){
+    return view('uppdate_profile');
+
+
+
+} )->name('home');
+
+Route::post('/update-profile', function (Request $request) {
+    $user = auth()->user();
+
+
+    if (!Hash::check($request->current_password, $user->password)) {
+        return back()->withErrors(['current_password' => 'Неверный текущий пароль']);
+    }
+
+    $request->validate([
+        'email' => 'required|email|unique:users,email,' . $user->id,
+        'name' => 'required|string|max:255',
+        'password' => 'nullable|string|min:8|confirmed',
+    ]);
+
+    $user->email = $request->email;
+    $user->name = $request->name;
+
+    if ($request->filled('password')) {
+        $user->password = Hash::make($request->password);
+    }
+
+    $user->save();
+
+    return redirect()->back()->with('success', 'Профиль успешно обновлен');
+})->name('home');
+
+
+
+
+
+//
 Route::get('/logn', function () {
     return view('logn');
 });
@@ -56,18 +126,18 @@ Route::post('/makeproduct', function (Request $request){
         'image'=>$request->input('image'),
         'price'=>$request->input('price')
     ]);
-    
+    return redirect()->back()->with('success', 'Изменения успешно сохранены!');
 });
 
-Route::get('/makeproduct', function (){
-    return view('makeproduct');
-});
+
 //
 
 //3order
 Route::get('/personal/order', function (){
+    $user = Auth::user();
     $orders = DB::table('orders')
         ->join('users', 'orders.UserName', '=', 'users.name')
+        ->where('users.id', '=', $user->id)
         ->orderBy('users.name')
         ->select('orders.*', 'users.name as UserName')
         ->get();
@@ -88,11 +158,15 @@ Route::get('/personal/order', function (){
 Route::get('/basket', function () {
     $items = DB::table('buskets')->get();
     $totalCost=0;
+    $productNames = [];
 
     foreach ($items as $item){
         $totalCost+=$item->totalcost;
+        $productNames[] = DB::table('products')
+            ->where('id', $item->Number)
+            ->first(); 
     }
-    return view('basket', ['items' => $items, 'totalCost'=> $totalCost]);
+    return view('basket', ['items' => $items, 'totalCost'=> $totalCost, 'productNames'=>$productNames]);
 });
 
 Route::post('/add-to-cart', function (Request $request){
@@ -136,7 +210,7 @@ Route::post('/create-order', function(){
 
     DB::table('buskets')->truncate();
 
-    return redirect('/main')->with('success','Заказ создан');
+    return redirect('/')->with('success','Заказ создан');
 
 });
 
@@ -179,13 +253,14 @@ Route::post('/apply-coupon', function (Request $request) {
 
 Route::get('/tovar/{id}', function ($id) {
     $product = DB::table('products')->where('id', $id)->first();
-    return view('tovar', compact('product'));
-});
+    $reviews = DB::table('reviews')->where('product',$id)->get();
+    return view('tovar', compact('product'),compact('reviews'));
+})->name('home');
 
 
 Route::post('/tovar/{id}/add-review', function (Request $request, $id) {
     $productID = $id;
-    $userName = $request->input('username');
+    $userName = auth()->user()->name;
     $feedback = $request->input('feedback');
     $evaluation = $request->input('evaluation');
 
@@ -197,7 +272,7 @@ Route::post('/tovar/{id}/add-review', function (Request $request, $id) {
     ]);
 
     return redirect()->back()->with('success', 'Отзыв добавлен');
-});
+})->name('home');
 
 
 
@@ -224,3 +299,42 @@ Route::get('/personal', function (){
 Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
+
+
+Route::group(['middleware' => ['role:admin']], function(){
+    Route::get('/admin',function(){
+        return view('admin');
+    });
+ 
+    Route::get('/admin/makeproduct', function (){
+        $products = DB::table('products')->get();
+        return view('makeproduct', compact('products'));
+    });
+
+    Route::get('/admin/makecatalog',function (){
+        return view('makecatalog');
+    });
+
+
+});
+
+
+//
+Route::post('/updateproducts', function (Request $request) {
+    $data = $request->all();
+    
+    foreach ($data['product'] as $product) {
+        DB::table('products')
+            ->where('id', $product['id'])
+            ->update($product);
+    }
+
+    return redirect()->back()->with('success', 'Изменения успешно сохранены!');
+});
+
+Route::delete('/deleteproduct/{id}', function ($id) {
+    DB::table('products')->where('id', $id)->delete();
+    return response()->json(['message' => 'Продукт успешно удален'], 200);
+});
+//

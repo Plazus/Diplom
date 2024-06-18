@@ -1,21 +1,22 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title> Create </title>
-</head>
+@extends('admin')
+@section('start')
 <body>
-    <h1>CreateCatalog</h1>
-    <form method="POST" action="/makecatalog">
-        @csrf
-        <label for="name"> NAME:</label>
-        <input type="text" id="name" name="name"><br><br>
-        <label for="description"> Desciption:</label>
-        <textarea id="description" name="description"> </textarea> <br> <br>
-        <input type="submit" value="Add Category">
-    </form>
-
-
-
-
+    <div class="container">
+        <h1>Создать новый тип товара</h1>
+        <form method="POST" action="/makecatalog" class="form">
+            @csrf
+            <table class="table">
+                <tr>
+                    <td><label for="name">Название:</label></td>
+                    <td><input type="text" id="name" name="name" class="form-control"></td>
+                </tr>
+                <tr>
+                    <td><label for="description">Примечание:</label></td>
+                    <td><textarea id="description" name="description" class="form-control"></textarea></td>
+                </tr>
+            </table>
+            <input type="submit" value="Добавить" class="btn btn-primary"> 
+        </form>
+    </div>
 </body>
-</html>
+@endsection

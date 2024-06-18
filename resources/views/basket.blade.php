@@ -7,17 +7,17 @@
             <tr>
                 <th>Номер</th>
                 <th>Количество</th>
-                <th>Имя пользователя</th>
+                <th>Товар</th>
                 <th>Цена</th>
                 <th>Действия</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($items as $item)
+            @foreach($items as $index => $item)
             <tr>
                 <td>{{ $item->Number }}</td>
                 <td>{{ $item->Count }}</td>
-                <td>{{ $item->UserName }}</td>
+                <td>{{  $productNames[$index]->name  }}</td>
                 <td>{{ $item->price }}</td>
                 <td><button class="btn btn-danger" onclick="removeFromCart({{ $item->id }})">Удалить</button></td>
             </tr>
@@ -57,7 +57,7 @@
                 _token: '{{ csrf_token() }}'
             },
             success: function(response) {
-                location.reload(); // Перезагрузка страницы после удаления товара
+                location.reload(); 
             }
         });
     }
